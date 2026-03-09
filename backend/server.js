@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { createClient } from '@supabase/supabase-js';
-import rateLimit from 'express-rate-limit';
+import { OAuth2Client } from 'google-auth-library';
 
 dotenv.config();
 
@@ -26,78 +26,120 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-// Rate Limiting (Using a token/ID instead of IP)
-// Express-rate-limit by default uses req.ip, we override keyGenerator to use a token
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 5, // Limit each token to 5 auth requests per windowMs
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    // Ideally extract a session ID or specific distinct header to avoid penalizing NAT IPs
-    return req.headers['x-device-id'] || req.ip;
-  },
-  message: { error: 'Too many authentication attempts. Please try again later.' }
+// Initialize Google OAuth2 Client
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Helper: Verify Google ID token and extract user info
+async function verifyGoogleToken(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { error: 'Missing or invalid authorization token', status: 401 };
+  }
+
+  const idToken = authHeader.split(' ')[1];
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload || !payload.sub) {
+      return { error: 'Invalid token payload', status: 401 };
+    }
+    return {
+      user: {
+        id: payload.sub,           // Google's unique user ID
+        email: payload.email,
+        name: payload.name,
+      }
+    };
+  } catch (err) {
+    console.error('Google token verification failed:', err.message);
+    return { error: 'Invalid or expired Google token. Please sign in again.', status: 401 };
+  }
+}
+
+// Check if a user has already voted
+app.get('/api/vote-status', async (req, res) => {
+  try {
+    const auth = await verifyGoogleToken(req);
+    if (auth.error) return res.status(auth.status).json({ error: auth.error });
+
+    const lockKey = `voted:${auth.user.id}`;
+    const hasVoted = await redis.get(lockKey);
+
+    return res.status(200).json({ hasVoted: !!hasVoted });
+  } catch (error) {
+    console.error('Vote status check error:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
-app.post('/api/auth/login', authLimiter, (req, res) => {
-  // Mock auth endpoint for demonstration
-  res.json({ message: 'Auth endpoint hit.' });
-});
-
-// The Core Vote Endpoint (High Concurrency 60-second window)
+// The Core Vote Endpoint
 app.post('/api/vote', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or invalid authorization token' });
-    }
+    const auth = await verifyGoogleToken(req);
+    if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
-    // BYPASS AUTH FOR TESTING
-    // We skip supabase.auth.getUser() and just trust the frontend token
-    const token = authHeader.split(' ')[1];
-
-    // For testing bypass, we need a valid UUID format for PostgreSQL.
-    // We'll generate a random UUID so it's unique each time.
-    const userId = "00000000-0000-0000-0000-" + Math.floor(Math.random() * 1000000000000).toString().padStart(12, '0');
-
+    const userId = auth.user.id;
     const { teamId } = req.body;
 
     if (!teamId) {
       return res.status(400).json({ error: 'Missing teamId' });
     }
 
-    // 2. The Race Condition Lock: SETNX (Set if Not eXists)
-    // This atomic operation guarantees a user can only vote once.
+    // Atomic lock: SETNX guarantees one vote per user
     const lockKey = `voted:${userId}`;
-
-    // Using simple string 'true', you could also set an expiry if needed
     const acquired = await redis.setnx(lockKey, 'true');
 
     if (acquired === 0) {
-      // Key already exists, user has voted
       return res.status(400).json({ error: 'Already Voted' });
     }
 
-    // 3. User secured the lock. Insert into PostgreSQL securely via Supabase.
-    // If this fails, we hold the lock to prevent re-votes, or we can DEL it to allow retries.
-    // Given the 60s window, a brief delay and retry logic might be needed on the client.
+    // Insert into PostgreSQL via Supabase
     const { error: insertError } = await supabase
       .from('votes')
       .insert({ user_id: userId, team_id: teamId });
 
     if (insertError) {
-      // If the DB strictly fails, we rollback the Redis lock so they can try again.
-      // E.g., foreign key violation, DB timeout.
       console.error('Database insert failed:', insertError);
       await redis.del(lockKey);
       return res.status(503).json({ error: 'Service temporarily unavailable. Try again.' });
     }
 
     return res.status(200).json({ message: 'Vote Recorded' });
-
   } catch (error) {
     console.error('Vote processing error:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Admin: Clear All Votes
+app.delete('/api/votes', async (req, res) => {
+  try {
+    const { error: deleteError } = await supabase
+      .from('votes')
+      .delete()
+      .gte('created_at', '1970-01-01');
+
+    if (deleteError) {
+      console.error('Failed to clear votes table:', deleteError);
+      return res.status(500).json({ error: 'Failed to clear votes from database.' });
+    }
+
+    try {
+      const keys = await redis.keys('voted:*');
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch (redisErr) {
+      console.warn('Redis lock cleanup failed (non-critical):', redisErr);
+    }
+
+    return res.status(200).json({ message: 'All votes cleared successfully.' });
+  } catch (error) {
+    console.error('Clear votes error:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 });
