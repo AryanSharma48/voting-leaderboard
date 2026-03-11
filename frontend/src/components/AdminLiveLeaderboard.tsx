@@ -170,7 +170,7 @@ export default function AdminLiveLeaderboard() {
 
   if (!user || (user as AdminUser).email !== ADMIN_EMAIL) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#181818] via-[#23272e] to-[#0d0d0d] flex items-center justify-center text-white">
+      <div className="min-h-screen bg-linear-to-br from-[#181818] via-[#23272e] to-[#0d0d0d] flex items-center justify-center text-white">
         <div className="bg-[#23272e] border border-[#222] rounded-xl p-10 text-center">
           <h1 className="text-3xl font-black uppercase tracking-wider text-[#FF3333] mb-4">
             Access Restricted
@@ -189,11 +189,11 @@ export default function AdminLiveLeaderboard() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#181818] via-[#23272e] to-[#0d0d0d] text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-linear-to-br from-[#181818] via-[#23272e] to-[#0d0d0d] text-white flex flex-col font-sans">
       <header className="flex flex-col md:flex-row justify-between items-center p-4 md:p-8 border-b border-[#222] bg-[#23272e]/80 backdrop-blur-lg w-full shadow-[0_4px_30px_rgba(0,0,0,0.5)] gap-6 md:gap-0">
         <div className="flex items-center space-x-0 md:space-x-6 text-center md:text-left">
           <div className="flex flex-col">
-            <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-r from-[#f8fafc] to-[#a3a3a3]">
+            <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-none text-transparent bg-clip-text bg-linear-to-r from-[#f8fafc] to-[#a3a3a3]">
               Live Results
             </h1>
             <p className="text-xs md:text-sm text-[#FF3333] font-black uppercase tracking-[0.2em] md:tracking-[0.4em] mt-2">
@@ -259,7 +259,7 @@ export default function AdminLiveLeaderboard() {
         </h2>
         <div className="w-full bg-[#23272e]/80 border border-[#222] rounded-xl shadow-lg p-4 md:p-8 overflow-x-auto">
           {leaderboard.length > 0 ? (
-            <table className="w-full text-left min-w-[300px]">
+            <table className="w-full text-left min-w-75">
               <thead>
                 <tr>
                   <th className="text-sm md:text-lg font-bold uppercase text-gray-400 pb-4 pr-2">Position</th>

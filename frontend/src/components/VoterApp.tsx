@@ -261,12 +261,12 @@ export default function VoterApp() {
       <div className="min-h-screen bg-[#050508] relative overflow-hidden flex flex-col items-center justify-center p-6 text-white font-['Cormorant_Garamond']">
         
         {/* Background Image & Stars */}
-        <div className="absolute inset-0 bg-[url('/favicon-nobg.png')] bg-[length:280px_280px] lg:bg-[length:350px_350px] bg-[center_top_12rem] bg-no-repeat bg-fixed opacity-15 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-[url('/favicon-nobg.png')] bg-size-[280px_280px] lg:bg-size-[350px_350px] bg-position-[center_top_12rem] bg-no-repeat bg-fixed opacity-15 pointer-events-none"></div>
         <div className="stars-container"></div>
         <div className="stars-container-2"></div>
 
         {/* Subtle background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[radial-gradient(circle,rgba(0,229,255,0.05)_0%,transparent_70%)] pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-200 h-200 bg-[radial-gradient(circle,rgba(0,229,255,0.05)_0%,transparent_70%)] pointer-events-none"></div>
 
         <div className="relative z-10 flex flex-col items-center max-w-sm w-full space-y-8">
           <div className="text-[#00e5ff]">
@@ -306,15 +306,15 @@ export default function VoterApp() {
     <div className="min-h-screen bg-[#050508] text-white flex justify-center relative overflow-hidden font-['Cormorant_Garamond']">
       
       {/* Background Image & Stars */}
-      <div className="absolute inset-0 bg-[url('/favicon-nobg.png')] bg-[length:280px_280px] lg:bg-[length:350px_350px] bg-[center_top_12rem] bg-no-repeat bg-fixed opacity-15 pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[url('/favicon-nobg.png')] bg-size-[280px_280px] lg:bg-size-[350px_350px] bg-position-[center_top_12rem] bg-no-repeat bg-fixed opacity-15 pointer-events-none"></div>
       <div className="stars-container"></div>
       <div className="stars-container-2"></div>
       
       {/* Background Starry/Cosmic Glows */}
-      <div className="absolute top-0 left-0 w-full h-[500px] bg-[radial-gradient(ellipse_at_top,rgba(0,229,255,0.08)_0%,transparent_70%)] pointer-events-none"></div>
-      <div className="absolute top-10 right-10 w-[300px] h-[300px] bg-[radial-gradient(circle,rgba(148,97,255,0.05)_0%,transparent_70%)] pointer-events-none"></div>
+      <div className="absolute top-0 left-0 w-full h-125 bg-[radial-gradient(ellipse_at_top,rgba(0,229,255,0.08)_0%,transparent_70%)] pointer-events-none"></div>
+      <div className="absolute top-10 right-10 w-75 h-75 bg-[radial-gradient(circle,rgba(148,97,255,0.05)_0%,transparent_70%)] pointer-events-none"></div>
 
-      <div className="w-full max-w-md flex flex-col relative z-10 pb-[160px]"> {/* Bottom padding for fixed footer */}
+      <div className="w-full max-w-md flex flex-col relative z-10 pb-40"> {/* Bottom padding for fixed footer */}
         
         {/* HEADER */}
         <div className="pt-12 pb-8 px-6 flex flex-col items-center text-center space-y-6">
@@ -335,7 +335,7 @@ export default function VoterApp() {
               Oneiros 2026
             </h2>
             <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#00e5ff]"></div>
-            <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-[#00e5ff]/30 to-transparent mt-[1px] mx-10"></div>
+            <div className="w-full h-px bg-linear-to-r from-transparent via-[#00e5ff]/30 to-transparent mt-px mx-10"></div>
           </div>
         </div>
 
@@ -360,7 +360,7 @@ export default function VoterApp() {
           </div>
         ) : (
           /* VOTING SELECTION */
-          <div className="px-6 space-y-8 flex-grow">
+          <div className="px-6 space-y-8 grow">
             
             {error && (
               <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-center space-x-2 text-red-400">
@@ -372,7 +372,7 @@ export default function VoterApp() {
             {/* User Card */}
             <div className="relative bg-[#0d0f12] rounded-2xl overflow-hidden border border-gray-800/80 p-5 pl-6 shadow-xl group">
               {/* Cyan left border highlight */}
-              <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-[#00e5ff] to-[#0088ff] shadow-[0_0_10px_rgba(0,229,255,0.5)]"></div>
+              <div className="absolute left-0 top-0 bottom-0 w-0.75 bg-linear-to-b from-[#00e5ff] to-[#0088ff] shadow-[0_0_10px_rgba(0,229,255,0.5)]"></div>
               
               <div className="flex justify-between items-start">
                 <div className="flex flex-col flex-wrap">
@@ -414,21 +414,21 @@ export default function VoterApp() {
                       <button
                         key={team.id}
                         onClick={() => setSelectedTeam(team.id)}
-                        className={`w-full relative flex items-center p-4 rounded-[1.5rem] border transition-all duration-300 ${
+                        className={`w-full relative flex items-center p-4 rounded-3xl border transition-all duration-300 ${
                           isSelected 
                             ? `border-gray-500 bg-[#16161c]` 
                             : 'border-gray-800/80 bg-[#121215] hover:border-gray-600 hover:bg-[#16161c]'
                         }`}
                       >
                         {/* Team Initial Box */}
-                        <div className={`h-14 w-14 rounded-2xl border ${accentBorder} bg-black/50 flex-shrink-0 flex items-center justify-center shadow-[inset_0_0_15px_rgba(0,0,0,0.5)]`}>
+                        <div className={`h-14 w-14 rounded-2xl border ${accentBorder} bg-black/50 shrink-0 flex items-center justify-center shadow-[inset_0_0_15px_rgba(0,0,0,0.5)]`}>
                           <span className={`font-['Cinzel'] font-black text-2xl ${accentText} drop-shadow-[0_0_8px_currentColor]`}>
                             {team.name.charAt(0)}
                           </span>
                         </div>
                         
                         {/* Text Content */}
-                        <div className="ml-4 flex-grow text-left">
+                        <div className="ml-4 grow text-left">
                           <h4 className={`font-['Cinzel'] text-xl font-bold tracking-wider uppercase transition-colors ${isSelected ? 'text-white' : 'text-gray-200'}`}>
                             {team.name}
                           </h4>
@@ -438,7 +438,7 @@ export default function VoterApp() {
                         </div>
 
                         {/* Selection Radio */}
-                        <div className="ml-4 flex-shrink-0 flex items-center justify-center p-2">
+                        <div className="ml-4 shrink-0 flex items-center justify-center p-2">
                           <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all ${
                             isSelected ? 'border-[#00e5ff] bg-[#00e5ff]/10' : 'border-gray-600'
                           }`}>
@@ -468,7 +468,7 @@ export default function VoterApp() {
               disabled={!selectedTeam || voting}
               className={`w-full py-4 rounded-3xl font-['Cinzel'] font-bold text-xl tracking-[0.2em] transition-all duration-500 uppercase flex justify-center items-center shadow-2xl ${
                 selectedTeam
-                  ? 'bg-gradient-to-r from-[#0f4b50] via-[#2a304e] to-[#4b1d3f] text-gray-100 hover:shadow-[0_0_30px_rgba(0,229,255,0.2)] hover:text-white border border-gray-500/30'
+                  ? 'bg-linear-to-r from-[#0f4b50] via-[#2a304e] to-[#4b1d3f] text-gray-100 hover:shadow-[0_0_30px_rgba(0,229,255,0.2)] hover:text-white border border-gray-500/30'
                   : 'bg-[#121215] text-gray-600 border border-gray-800 cursor-not-allowed'
               }`}
             >
