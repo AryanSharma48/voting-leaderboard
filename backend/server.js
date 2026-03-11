@@ -89,6 +89,24 @@ app.post('/api/vote', async (req, res) => {
       return res.status(400).json({ error: 'Missing teamId' });
     }
 
+    // Check the "Master Switch" in Supabase before proceeding
+    const { data: config, error: configError } = await supabase
+      .from('system_config')
+      .select('value')
+      .eq('key', 'voting_active')
+      .single();
+
+    if (configError) {
+      console.error('Config check failed:', configError);
+      return res.status(500).json({ error: 'Could not verify voting status.' });
+    }
+
+    // If the switch is OFF, block the vote immediately with a 403 Forbidden
+    if (config && config.value === false) {
+      return res.status(403).json({ error: 'Voting is currently paused by the administrator.' });
+    }
+    // ---------------------------------------------------------
+
     // Atomic lock: SETNX guarantees one vote per user
     const lockKey = `voted:${userId}`;
     const acquired = await redis.setnx(lockKey, 'true');
