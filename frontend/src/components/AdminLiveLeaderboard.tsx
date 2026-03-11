@@ -35,7 +35,8 @@ export default function AdminLiveLeaderboard() {
       const { error } = await supabase
         .from('system_config')
         .update({ value: !isVotingEnabled })
-        .eq('key', 'voting_active');
+        .eq('key', 'voting_active')
+        .select();
 
       if (error) throw error;
       // State will update via the Realtime listener below, 
