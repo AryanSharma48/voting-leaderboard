@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Trash2, Lock, Unlock } from 'lucide-react'; // Added Lock icons
+import { Trash2, Lock, Unlock, LogOut } from 'lucide-react'; // Added Lock icons
 
 interface LeaderboardEntry {
   team_id: string;
@@ -8,15 +8,25 @@ interface LeaderboardEntry {
   vote_count: number;
 }
 
+interface AdminUser {
+  email: string;
+  name?: string;
+}
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function AdminLiveLeaderboard() {
+
+  const [user, setUser] = useState<unknown>(null);
+
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [totalVotes, setTotalVotes] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
   // --- New State for Toggle ---
   const [isVotingEnabled, setIsVotingEnabled] = useState<boolean>(true);
   const [isToggling, setIsToggling] = useState(false);
+
+  const ADMIN_EMAIL = "aryansharma24106@gmail.com";
 
   // --- New Function to Toggle Voting ---
   const toggleVoting = async () => {
@@ -59,6 +69,27 @@ export default function AdminLiveLeaderboard() {
   };
 
   useEffect(() => {
+  const storedUser = localStorage.getItem("google_user");
+
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        setUser(null);
+      }
+    }
+  }, []);
+
+  const logout = () => {
+    localStorage.removeItem("google_user");
+    window.location.href = "/";
+  };
+
+
+  useEffect(() => {
+
+    if (!user || (user as AdminUser).email !== ADMIN_EMAIL) return;
+
     fetchLeaderboard();
     fetchInitialConfig(); // Fetch toggle state on load
 
@@ -96,7 +127,7 @@ export default function AdminLiveLeaderboard() {
       supabase.removeChannel(voteChannel);
       supabase.removeChannel(configChannel);
     };
-  }, []);
+  }, [user]);
 
   const fetchInitialConfig = async () => {
     const { data } = await supabase
@@ -126,6 +157,27 @@ export default function AdminLiveLeaderboard() {
       console.error('Failed to fetch initial leaderboard:', err);
     }
   };
+
+
+  if (!user || (user as AdminUser).email !== ADMIN_EMAIL) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#181818] via-[#23272e] to-[#0d0d0d] flex items-center justify-center text-white">
+        <div className="bg-[#23272e] border border-[#222] rounded-xl p-10 text-center">
+          <h1 className="text-3xl font-black uppercase tracking-wider text-[#FF3333] mb-4">
+            Access Restricted
+          </h1>
+
+          <button
+            onClick={() => window.location.href = '/'}
+            className="px-6 py-3 bg-[#FF3333]/10 border border-[#FF3333] rounded-xl text-[#FF3333] font-black uppercase"
+          >
+            Return to Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#181818] via-[#23272e] to-[#0d0d0d] text-white flex flex-col font-sans">
@@ -169,6 +221,7 @@ export default function AdminLiveLeaderboard() {
               </span>
             </button>
 
+
             <button
               onClick={clearAllVotes}
               disabled={isClearing}
@@ -178,6 +231,13 @@ export default function AdminLiveLeaderboard() {
               <span className="font-black uppercase tracking-[0.3em] text-sm whitespace-nowrap">
                 {isClearing ? 'Clearing...' : 'Clear Votes'}
               </span>
+            </button>
+            <button
+              onClick={logout}
+              className="flex items-center space-x-2 px-4 py-2 border border-[#FF3333] text-[#FF3333] rounded-xl hover:bg-[#FF3333]/20"
+            >
+              <LogOut size={18} />
+              <span>Logout</span>
             </button>
           </div>
         </div>
