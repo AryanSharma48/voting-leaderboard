@@ -18,6 +18,18 @@ interface GoogleUser {
   credential: string; // The ID token
 }
 
+interface VoteStatusResponse {
+  hasVoted: boolean;
+  votingActive: boolean;
+  session: string;
+}
+
+interface LiveCountsResponse {
+  counts: Record<string, number>;
+  current_voting_session: string;
+  voting_active: boolean;
+}
+
 declare global {
   interface Window {
     google: any;
@@ -28,6 +40,12 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+// Fetcher with auth header
+const authFetcher = (url: string, credential: string) => 
+  fetch(url, {
+    headers: { 'Authorization': `Bearer ${credential}` }
+  }).then(res => res.json());
 
 // A helper for team-specific border/accent colors based on index
 const teamColors = [
@@ -54,29 +72,36 @@ export default function VoterApp() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   
-  // --- New State for Voting Toggle ---
+  // Voting state from server
   const [isVotingEnabled, setIsVotingEnabled] = useState<boolean>(true);
+  const [currentSession, setCurrentSession] = useState<string>('1');
   
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  // Poll for current_voting_session
-  const { data: liveData } = useSWR(`/api/live-counts`, fetcher, { refreshInterval: 3000 });
+  // Poll for live counts (includes voting_active state)
+  const { data: liveData } = useSWR<LiveCountsResponse>(
+    `/api/live-counts`, 
+    fetcher, 
+    { refreshInterval: 3000 }
+  );
 
+  // Update voting state from polling data
   useEffect(() => {
-    if (liveData && liveData.current_voting_session && user) {
-      const storedSession = localStorage.getItem(`session_${user.id}`);
-      const incomingSession = String(liveData.current_voting_session);
+    if (liveData) {
+      setIsVotingEnabled(liveData.voting_active);
       
-      if (storedSession !== incomingSession) {
-        // We have a new session from the admin clearing votes!
-        localStorage.setItem(`session_${user.id}`, incomingSession);
-        
-        // Wipe local lock
-        setVoted(false);
-        localStorage.removeItem(`local_voted_${user.id}`);
+      // Check for session changes (admin reset)
+      const newSession = liveData.current_voting_session;
+      if (newSession && newSession !== currentSession) {
+        console.log(`Session changed: ${currentSession} -> ${newSession}`);
+        setCurrentSession(newSession);
+        // Re-check vote status on session change
+        if (user) {
+          checkVoteStatus(user.credential);
+        }
       }
     }
-  }, [liveData, user]);
+  }, [liveData, currentSession, user]);
 
   const decodeJwt = (token: string) => {
     const base64Url = token.split('.')[1];
@@ -103,7 +128,7 @@ export default function VoterApp() {
     localStorage.setItem('google_user', JSON.stringify(googleUser));
   }, []);
 
-  // --- Realtime Listener for Master Toggle ---
+  // --- Realtime Listener for Master Toggle (backup to polling) ---
   useEffect(() => {
     const fetchVotingStatus = async () => {
       const { data } = await supabase
@@ -139,7 +164,7 @@ export default function VoterApp() {
           window.google.accounts.id.renderButton(googleBtnRef.current, {
             theme: 'filled_black',
             size: 'large',
-            width: 280, // <-- Reduced width from 380 to 280 to prevent overflow on mobile
+            width: 280,
             text: 'signin_with',
             shape: 'pill',
           });
@@ -163,7 +188,7 @@ export default function VoterApp() {
   useEffect(() => {
     if (user) {
       fetchTeams();
-      checkVoteStatus();
+      checkVoteStatus(user.credential);
     } else {
       setLoading(false);
     }
@@ -181,26 +206,29 @@ export default function VoterApp() {
     }
   };
 
-  const checkVoteStatus = async () => {
-    if (!user) return;
-    
-    // Optimistic UI check
-    if (localStorage.getItem(`local_voted_${user.id}`) === 'true') {
-      setVoted(true);
-      return;
-    }
-
+  // Check vote status from backend (single source of truth)
+  const checkVoteStatus = async (credential: string) => {
     try {
       const res = await fetch(`${API_URL}/api/vote-status`, {
-        headers: { 'Authorization': `Bearer ${user.credential}` }
+        headers: { 'Authorization': `Bearer ${credential}` }
       });
-      const data = await res.json();
-      if (data.hasVoted) {
-        setVoted(true);
-        localStorage.setItem(`local_voted_${user.id}`, 'true');
+      
+      if (res.status === 401) {
+        // Token expired, force re-login
+        handleLogout();
+        setError('Session expired. Please sign in again.');
+        return;
+      }
+      
+      const data: VoteStatusResponse = await res.json();
+      setVoted(data.hasVoted);
+      setIsVotingEnabled(data.votingActive);
+      if (data.session) {
+        setCurrentSession(data.session);
       }
     } catch (err) {
       console.error('Failed to check vote status:', err);
+      // Don't block UI on status check failure
     }
   };
 
@@ -220,10 +248,6 @@ export default function VoterApp() {
     setVoting(true);
     setError(null);
 
-    // Optimistic UI: Lock the vote immediately
-    setVoted(true);
-    localStorage.setItem(`local_voted_${user.id}`, 'true');
-
     try {
       const response = await fetch(`${API_URL}/api/vote`, {
         method: 'POST',
@@ -238,29 +262,27 @@ export default function VoterApp() {
 
       if (!response.ok) {
         if (response.status === 400 && data.error === 'Already Voted') {
-          // They already voted, keep it locked
+          // Already voted - update UI to reflect
           setVoted(true);
-          localStorage.setItem(`local_voted_${user.id}`, 'true');
+        } else if (response.status === 400 && data.error === 'Already voted for a different team') {
+          // Already voted for another team
+          setVoted(true);
+          setError('You have already voted for a different team.');
         } else if (response.status === 401) {
           handleLogout();
           setError('Session expired. Please sign in again.');
-          // Revert optimistic lock
-          setVoted(false);
-          localStorage.removeItem(`local_voted_${user.id}`);
+        } else if (response.status === 403) {
+          setError('Voting is currently paused by the administrator.');
+          setIsVotingEnabled(false);
         } else {
-          // Revert optimistic lock on generic failure
-          setVoted(false);
-          localStorage.removeItem(`local_voted_${user.id}`);
           throw new Error(data.error || 'Failed to vote');
         }
       } else {
-        // Success
+        // Success - update UI
         setVoted(true);
       }
     } catch (err: any) {
       setError(err.message);
-      setVoted(false);
-      localStorage.removeItem(`local_voted_${user.id}`);
     } finally {
       setVoting(false);
     }

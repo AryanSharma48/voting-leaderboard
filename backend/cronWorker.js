@@ -17,7 +17,10 @@ const supabase = createClient(
 
 console.log('⏳ Initializing Vote Sync Cron Worker...');
 
-// Run every 60 seconds
+/**
+ * Sync Redis leaderboard counts to Supabase leaderboard table
+ * This provides a backup materialized view for the admin dashboard
+ */
 cron.schedule('*/60 * * * * *', async () => {
   console.log('🔄 [CRON] Starting Redis -> Supabase Vote Sync...');
   try {
@@ -28,17 +31,30 @@ cron.schedule('*/60 * * * * *', async () => {
       return;
     }
 
-    // 2. Prepare bulk update for Supabase Leaderboard
+    // 2. Get team names for the leaderboard
+    const { data: teams, error: teamsError } = await supabase
+      .from('teams')
+      .select('id, name');
+
+    if (teamsError) {
+      console.error('❌ [CRON] Failed to fetch teams:', teamsError.message);
+      return;
+    }
+
+    const teamNameMap = new Map(teams?.map(t => [t.id, t.name]) || []);
+
+    // 3. Prepare bulk update for Supabase Leaderboard
     const updates = Object.keys(liveCounts).map((teamId) => {
-      let val = liveCounts[teamId];
-      // hgetall returns strings, parse them
+      const val = liveCounts[teamId];
       return {
         team_id: teamId,
-        vote_count: parseInt(val, 10),
+        name: teamNameMap.get(teamId) || 'Unknown Team',
+        vote_count: parseInt(String(val), 10),
+        updated_at: new Date().toISOString()
       };
     });
 
-    // 3. Perform Upsert to Postgres
+    // 4. Perform Upsert to Postgres leaderboard table
     const { error } = await supabase
       .from('leaderboard')
       .upsert(updates, { onConflict: 'team_id' });
@@ -51,5 +67,17 @@ cron.schedule('*/60 * * * * *', async () => {
 
   } catch (error) {
     console.error('❌ [CRON] Unexpected Error during sync:', error.message);
+  }
+});
+
+/**
+ * Health check - verify Redis connection every 5 minutes
+ */
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    await redis.ping();
+    console.log('💓 [CRON] Redis health check: OK');
+  } catch (error) {
+    console.error('💔 [CRON] Redis health check failed:', error.message);
   }
 });

@@ -1,22 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 
-// Initialize Redis Client
+// Initialize Redis Client (read-only operations)
 const redis = new Redis({
-  url: process.env.VITE_UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.VITE_UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '',
+  url: process.env.UPSTASH_REDIS_REST_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
+// Allowed origin for CORS
+const ALLOWED_ORIGIN = process.env.FRONTEND_URL || process.env.VITE_FRONTEND_URL || '*';
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS configuration
+  // Secure CORS configuration
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*'); // Adjust this in production
+  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
-  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  // Prevent caching of live data
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -27,20 +32,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // We expect vote keys to follow the pattern team_votes:{teamId}
-    // Alternatively, we can keep a sorted set or a hash in redis.
-    // Let's assume the previous backend used a pattern, or we create a new standard here.
-    // If we use individual keys: `team_votes:*`
-    // Or better, a single Redis Hash mapping team_id -> count: `live_leaderboard`
-    const [teamsHashes, currentSession] = await Promise.all([
+    // Fetch all required data in parallel for efficiency
+    const [leaderboard, currentSession, votingActive] = await Promise.all([
       redis.hgetall('live_leaderboard'),
-      redis.get('current_voting_session')
+      redis.get('current_voting_session'),
+      redis.get('voting_active')
     ]);
     
-    // If the hash is empty, we return an empty object
     return res.status(200).json({ 
-      counts: teamsHashes || {},
-      current_voting_session: currentSession || null
+      counts: leaderboard || {},
+      current_voting_session: currentSession || '1',
+      voting_active: votingActive !== 'false' // Default to true if not set
     });
   } catch (error: any) {
     console.error('Fetch live counts error:', error.message);
