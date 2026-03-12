@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { createClient } from '@supabase/supabase-js';
 import { OAuth2Client } from 'google-auth-library';
+import './cronWorker.js';
 
 dotenv.config();
 

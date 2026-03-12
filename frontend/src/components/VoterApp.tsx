@@ -161,6 +161,13 @@ export default function VoterApp() {
 
   const checkVoteStatus = async () => {
     if (!user) return;
+    
+    // Optimistic UI check
+    if (localStorage.getItem(`local_voted_${user.id}`) === 'true') {
+      setVoted(true);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_URL}/api/vote-status`, {
         headers: { 'Authorization': `Bearer ${user.credential}` }
@@ -168,6 +175,7 @@ export default function VoterApp() {
       const data = await res.json();
       if (data.hasVoted) {
         setVoted(true);
+        localStorage.setItem(`local_voted_${user.id}`, 'true');
       }
     } catch (err) {
       console.error('Failed to check vote status:', err);
@@ -190,6 +198,10 @@ export default function VoterApp() {
     setVoting(true);
     setError(null);
 
+    // Optimistic UI: Lock the vote immediately
+    setVoted(true);
+    localStorage.setItem(`local_voted_${user.id}`, 'true');
+
     try {
       const response = await fetch(`${API_URL}/api/vote`, {
         method: 'POST',
@@ -204,18 +216,29 @@ export default function VoterApp() {
 
       if (!response.ok) {
         if (response.status === 400 && data.error === 'Already Voted') {
+          // They already voted, keep it locked
           setVoted(true);
+          localStorage.setItem(`local_voted_${user.id}`, 'true');
         } else if (response.status === 401) {
           handleLogout();
           setError('Session expired. Please sign in again.');
+          // Revert optimistic lock
+          setVoted(false);
+          localStorage.removeItem(`local_voted_${user.id}`);
         } else {
+          // Revert optimistic lock on generic failure
+          setVoted(false);
+          localStorage.removeItem(`local_voted_${user.id}`);
           throw new Error(data.error || 'Failed to vote');
         }
       } else {
+        // Success
         setVoted(true);
       }
     } catch (err: any) {
       setError(err.message);
+      setVoted(false);
+      localStorage.removeItem(`local_voted_${user.id}`);
     } finally {
       setVoting(false);
     }

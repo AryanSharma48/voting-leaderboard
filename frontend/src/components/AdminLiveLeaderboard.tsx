@@ -95,32 +95,46 @@ export default function AdminLiveLeaderboard() {
   };
 
 
-  useEffect(() => {
-
-    if (!user || (user as AdminUser).email !== ADMIN_EMAIL) return;
-
-    fetchLeaderboard();
-    fetchInitialConfig(); // Fetch toggle state on load
-
-    // Subscribe to Votes
-    const voteChannel = supabase
-      .channel('public:votes')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votes' }, (payload) => {
+  const pollLiveCounts = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/live-counts`);
+      const data = await res.json();
+      
+      if (data.counts) {
         setLeaderboard((current) => {
-          let updated = current.map(team => 
-            team.team_id === payload.new.team_id 
-              ? { ...team, vote_count: team.vote_count + 1 }
-              : team
-          );
+          let updated = current.map(team => {
+            const redisCount = data.counts[team.team_id];
+            return {
+              ...team,
+              vote_count: redisCount ? parseInt(redisCount) : team.vote_count
+            };
+          });
+          
           updated.sort((a, b) => {
             if (b.vote_count !== a.vote_count) return b.vote_count - a.vote_count;
             return a.name.localeCompare(b.name);
           });
+          
+          // Calculate new total
+          const newTotal = updated.reduce((acc, curr) => acc + curr.vote_count, 0);
+          setTotalVotes(newTotal);
+          
           return updated;
         });
-        setTotalVotes(current => current + 1);
-      })
-      .subscribe();
+      }
+    } catch (err) {
+      console.error('Failed to poll counts:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!user || (user as AdminUser).email !== ADMIN_EMAIL) return;
+
+    fetchLeaderboard();
+    fetchInitialConfig();
+
+    // Smart Polling: Fetch live counts from Redis every 3 seconds
+    const intervalId = setInterval(pollLiveCounts, 3000);
 
     // --- Realtime listener for Config Toggle ---
     const configChannel = supabase
@@ -133,7 +147,7 @@ export default function AdminLiveLeaderboard() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(voteChannel);
+      clearInterval(intervalId);
       supabase.removeChannel(configChannel);
     };
   }, [user]);
